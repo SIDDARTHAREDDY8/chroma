@@ -61,7 +61,7 @@ pub async fn add_attached_function_input(
     })?;
 
     let output_collection = sysdb_client
-        .get_collection_with_segments(Some(database_name), output_collection_id)
+        .get_collection_with_segments(None, Some(database_name), output_collection_id)
         .await
         .map_err(|e| AttachFunctionError::Internal(Box::new(e)))?;
 

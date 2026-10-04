@@ -106,7 +106,7 @@ async fn trigger_vector_segments_max_seq_id_migration(
 
     for collection_id in collection_ids {
         let mut collection = sysdb
-            .get_collection_with_segments(None, collection_id)
+            .get_collection_with_segments(None, None, collection_id)
             .await?;
 
         if collection.collection.schema.is_none() {

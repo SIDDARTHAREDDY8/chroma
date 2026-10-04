@@ -723,6 +723,8 @@ impl SqliteSysDb {
 
     pub(crate) async fn get_collection_with_segments(
         &self,
+        tenant: Option<String>,
+        database: Option<String>,
         collection_id: CollectionUuid,
     ) -> Result<CollectionAndSegments, GetCollectionWithSegmentsError> {
         let collections = self
@@ -730,8 +732,8 @@ impl SqliteSysDb {
                 self.db.get_conn(),
                 Some(collection_id),
                 None,
-                None,
-                None,
+                tenant,
+                database,
                 None,
                 0,
             )
@@ -1841,7 +1843,7 @@ mod tests {
             .unwrap();
 
         let collection_and_segments = sysdb
-            .get_collection_with_segments(collection_id)
+            .get_collection_with_segments(None, None, collection_id)
             .await
             .unwrap();
 
@@ -1851,6 +1853,93 @@ mod tests {
             collection_and_segments.metadata_segment.metadata,
             segments[0].metadata
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_collection_with_segments_is_tenant_scoped() {
+        // Regression test for https://github.com/chroma-core/chroma/issues/7462:
+        // resolving a collection purely by UUID must not leak it across
+        // tenant/database boundaries.
+        let db = get_new_sqlite_db().await;
+        let sysdb = SqliteSysDb::new(db, "default".to_string(), "default".to_string());
+
+        sysdb.create_tenant("tenant_a".to_string()).await.unwrap();
+        sysdb
+            .create_database(uuid::Uuid::new_v4(), "database_a", "tenant_a")
+            .await
+            .unwrap();
+
+        let collection_id = CollectionUuid::new();
+        let segments = vec![
+            Segment {
+                id: SegmentUuid::new(),
+                r#type: SegmentType::BlockfileMetadata,
+                scope: SegmentScope::METADATA,
+                collection: collection_id,
+                metadata: None,
+                file_path: HashMap::new(),
+            },
+            Segment {
+                id: SegmentUuid::new(),
+                r#type: SegmentType::HnswDistributed,
+                scope: SegmentScope::VECTOR,
+                collection: collection_id,
+                metadata: None,
+                file_path: HashMap::new(),
+            },
+        ];
+        sysdb
+            .create_collection(
+                "tenant_a".to_string(),
+                "database_a".to_string(),
+                collection_id,
+                "test_collection".to_string(),
+                segments.clone(),
+                Some(InternalCollectionConfiguration::default_hnsw()),
+                Some(Schema::new_default(KnnIndex::Hnsw)),
+                None,
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+
+        // Correct tenant and database resolve the collection.
+        let collection_and_segments = sysdb
+            .get_collection_with_segments(
+                Some("tenant_a".to_string()),
+                Some("database_a".to_string()),
+                collection_id,
+            )
+            .await
+            .unwrap();
+        assert_eq!(collection_and_segments.collection.name, "test_collection");
+
+        // A foreign tenant must not resolve the collection.
+        let cross_tenant = sysdb
+            .get_collection_with_segments(
+                Some("tenant_b".to_string()),
+                Some("database_a".to_string()),
+                collection_id,
+            )
+            .await;
+        assert!(matches!(
+            cross_tenant,
+            Err(GetCollectionWithSegmentsError::NotFound(_))
+        ));
+
+        // A foreign database must not resolve the collection either.
+        let cross_database = sysdb
+            .get_collection_with_segments(
+                Some("tenant_a".to_string()),
+                Some("database_b".to_string()),
+                collection_id,
+            )
+            .await;
+        assert!(matches!(
+            cross_database,
+            Err(GetCollectionWithSegmentsError::NotFound(_))
+        ));
     }
 
     #[tokio::test]

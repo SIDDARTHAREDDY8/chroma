@@ -428,7 +428,7 @@ impl ServiceBasedFrontend {
         tenant_id: &str,
     ) -> Result<CollectionAndSegments, Box<dyn ChromaError>> {
         let collection_and_segments = provider
-            .get_collection_with_segments(database_name.clone(), collection_id)
+            .get_collection_with_segments(Some(tenant_id), database_name.clone(), collection_id)
             .await
             .map_err(|err| Box::new(err) as Box<dyn ChromaError>)?;
         Self::validate_collection_scope(
@@ -1186,12 +1186,13 @@ impl ServiceBasedFrontend {
 
     pub async fn get_cached_collection(
         &mut self,
+        tenant_id: &str,
         database_name: DatabaseName,
         collection_id: CollectionUuid,
     ) -> Result<Collection, GetCollectionError> {
         Ok(self
             .collections_with_segments_provider
-            .get_collection_with_segments(Some(database_name), collection_id)
+            .get_collection_with_segments(Some(tenant_id), Some(database_name), collection_id)
             .await
             .map_err(|err| Box::new(err) as Box<dyn ChromaError>)?
             .collection)
@@ -1204,7 +1205,7 @@ impl ServiceBasedFrontend {
         tenant_id: &str,
     ) -> Result<Collection, GetCollectionError> {
         let collection = self
-            .get_cached_collection(database_name.clone(), collection_id)
+            .get_cached_collection(tenant_id, database_name.clone(), collection_id)
             .await?;
         Self::validate_collection_scope(&collection, Some(&database_name), tenant_id)
             .map_err(|_| GetCollectionError::NotFound(collection_id.to_string()))?;

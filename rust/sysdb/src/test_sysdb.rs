@@ -847,14 +847,28 @@ impl TestSysDb {
 
     pub(crate) async fn get_collection_with_segments(
         &self,
+        tenant: Option<String>,
+        database: Option<String>,
         collection_id: CollectionUuid,
     ) -> Result<CollectionAndSegments, GetCollectionWithSegmentsError> {
         let inner = self.inner.lock();
-        let collection = inner.collections.get(&collection_id).cloned().ok_or(
-            GetCollectionWithSegmentsError::NotFound(
+        let collection = inner
+            .collections
+            .get(&collection_id)
+            .filter(|collection| {
+                Self::filter_collections(
+                    collection,
+                    Some(collection_id),
+                    None,
+                    None,
+                    tenant.clone(),
+                    database.clone(),
+                )
+            })
+            .cloned()
+            .ok_or(GetCollectionWithSegmentsError::NotFound(
                 "Collection not found in TestSysDB".to_string(),
-            ),
-        )?;
+            ))?;
         let segments = inner
             .segments
             .values()

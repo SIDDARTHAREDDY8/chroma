@@ -142,6 +142,7 @@ impl CollectionsWithSegmentsProvider {
 
     pub(crate) async fn get_collection_with_segments(
         &mut self,
+        tenant: Option<&str>,
         database_name: Option<DatabaseName>,
         collection_id: CollectionUuid,
     ) -> Result<CollectionAndSegments, CollectionsWithSegmentsProviderError> {
@@ -181,7 +182,11 @@ impl CollectionsWithSegmentsProvider {
             }
             tracing::info!("Cache miss for collection {}", collection_id);
             self.sysdb_client
-                .get_collection_with_segments(database_name, collection_id)
+                .get_collection_with_segments(
+                    tenant.map(str::to_string),
+                    database_name,
+                    collection_id,
+                )
                 .await?
         };
 

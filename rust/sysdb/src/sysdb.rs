@@ -573,6 +573,7 @@ impl SysDb {
     // or non-mcmr sysdb depending on the prefix.
     pub async fn get_collection_with_segments(
         &mut self,
+        tenant: Option<String>,
         database: Option<DatabaseName>,
         collection_id: CollectionUuid,
     ) -> Result<CollectionAndSegments, GetCollectionWithSegmentsError> {
@@ -582,10 +583,22 @@ impl SysDb {
                     .get_collection_with_segments(database, collection_id)
                     .await
             }
-            SysDb::Sqlite(sqlite) => sqlite.get_collection_with_segments(collection_id).await,
+            SysDb::Sqlite(sqlite) => {
+                sqlite
+                    .get_collection_with_segments(
+                        tenant,
+                        database.map(|database| database.as_ref().to_string()),
+                        collection_id,
+                    )
+                    .await
+            }
             SysDb::Test(test_sys_db) => {
                 test_sys_db
-                    .get_collection_with_segments(collection_id)
+                    .get_collection_with_segments(
+                        tenant,
+                        database.map(|database| database.as_ref().to_string()),
+                        collection_id,
+                    )
                     .await
             }
         }
